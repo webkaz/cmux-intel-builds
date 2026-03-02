@@ -1,0 +1,155 @@
+name: Build Intel Mac from upstream release
+
+on:
+  schedule:
+    # 6時間ごとに上流の新リリースをチェック
+    - cron: "0 */6 * * *"
+  workflow_dispatch:
+    inputs:
+      upstream_tag:
+        description: "Build specific upstream tag (e.g., v0.61.0). Leave empty to auto-detect latest."
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+env:
+  UPSTREAM_REPO: manaflow-ai/cmux
+  CREATE_DMG_VERSION: 8.0.0
+
+jobs:
+  check-upstream:
+    runs-on: ubuntu-latest
+    outputs:
+      should_build: ${{ steps.check.outputs.should_build }}
+      upstream_tag: ${{ steps.check.outputs.upstream_tag }}
+    steps:
+      - name: Check for new upstream release
+        id: check
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          # 手動指定時はそのタグでビルド
+          INPUT_TAG="${{ inputs.upstream_tag }}"
+          if [ -n "$INPUT_TAG" ]; then
+            echo "Manual trigger: building $INPUT_TAG"
+            echo "should_build=true" >> "$GITHUB_OUTPUT"
+            echo "upstream_tag=$INPUT_TAG" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # 上流の最新リリースタグを取得
+          UPSTREAM_TAG=$(gh api "repos/${UPSTREAM_REPO}/releases/latest" --jq '.tag_name')
+          echo "Latest upstream release: $UPSTREAM_TAG"
+
+          # 既にIntel版がリリース済みか確認
+          INTEL_TAG="${UPSTREAM_TAG}-intel"
+          if gh api "repos/${{ github.repository }}/releases/tags/${INTEL_TAG}" >/dev/null 2>&1; then
+            echo "Intel build for $UPSTREAM_TAG already exists, skipping"
+            echo "should_build=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "No Intel build for $UPSTREAM_TAG found, will build"
+            echo "should_build=true" >> "$GITHUB_OUTPUT"
+            echo "upstream_tag=$UPSTREAM_TAG" >> "$GITHUB_OUTPUT"
+          fi
+
+  build-intel:
+    needs: check-upstream
+    if: needs.check-upstream.outputs.should_build == 'true'
+    runs-on: macos-15
+    env:
+      UPSTREAM_TAG: ${{ needs.check-upstream.outputs.upstream_tag }}
+    steps:
+      - name: Checkout upstream at tag
+        uses: actions/checkout@v4
+        with:
+          repository: manaflow-ai/cmux
+          ref: ${{ needs.check-upstream.outputs.upstream_tag }}
+          submodules: recursive
+
+      - name: Select Xcode
+        run: |
+          set -euo pipefail
+          if [ -d "/Applications/Xcode.app/Contents/Developer" ]; then
+            XCODE_DIR="/Applications/Xcode.app/Contents/Developer"
+          else
+            XCODE_APP="$(ls -d /Applications/Xcode*.app 2>/dev/null | head -n 1 || true)"
+            if [ -n "$XCODE_APP" ]; then
+              XCODE_DIR="$XCODE_APP/Contents/Developer"
+            else
+              echo "No Xcode.app found" >&2
+              exit 1
+            fi
+          fi
+          echo "DEVELOPER_DIR=$XCODE_DIR" >> "$GITHUB_ENV"
+          export DEVELOPER_DIR="$XCODE_DIR"
+          xcodebuild -version
+          xcrun --sdk macosx --show-sdk-path
+
+      - name: Download pre-built GhosttyKit.xcframework
+        id: prebuilt
+        run: |
+          set -euo pipefail
+          GHOSTTY_SHA=$(git -C ghostty rev-parse HEAD)
+          TAG="xcframework-$GHOSTTY_SHA"
+          URL="https://github.com/manaflow-ai/ghostty/releases/download/$TAG/GhosttyKit.xcframework.tar.gz"
+          echo "Downloading xcframework for ghostty $GHOSTTY_SHA"
+          curl -fSL --retry 5 --retry-delay 15 -o GhosttyKit.xcframework.tar.gz "$URL"
+          tar xzf GhosttyKit.xcframework.tar.gz
+          rm GhosttyKit.xcframework.tar.gz
+          test -d GhosttyKit.xcframework
+          echo "=== xcframework contents ==="
+          find GhosttyKit.xcframework -name GhosttyKit -type f -exec sh -c 'echo "{}:"; file "{}"; lipo -info "{}" 2>/dev/null || true' \;
+
+      - name: Build app for x86_64 (unsigned)
+        run: |
+          xcodebuild \
+            -scheme cmux \
+            -configuration Release \
+            -derivedDataPath build \
+            ARCHS=x86_64 \
+            ONLY_ACTIVE_ARCH=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            build
+
+      - name: Verify x86_64 binary
+        run: |
+          set -euo pipefail
+          APP_BIN="build/Build/Products/Release/cmux.app/Contents/MacOS/cmux"
+          echo "Binary architecture:"
+          file "$APP_BIN"
+          lipo -info "$APP_BIN"
+          if ! lipo -info "$APP_BIN" | grep -q "x86_64"; then
+            echo "ERROR: Binary does not contain x86_64" >&2
+            exit 1
+          fi
+
+      - name: Create DMG
+        run: |
+          npm install -g "create-dmg@${CREATE_DMG_VERSION}"
+          APP_PATH="build/Build/Products/Release/cmux.app"
+          # create-dmg exits non-zero when no signing identity is found (expected for unsigned builds)
+          create-dmg "$APP_PATH" ./ || true
+          mv ./cmux*.dmg cmux-macos-intel.dmg
+          ls -lh cmux-macos-intel.dmg
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.UPSTREAM_TAG }}-intel
+          name: "${{ env.UPSTREAM_TAG }} (Intel Mac)"
+          body: |
+            Intel Mac (x86_64) build of cmux ${{ env.UPSTREAM_TAG }}.
+
+            **Upstream release:** https://github.com/${{ env.UPSTREAM_REPO }}/releases/tag/${{ env.UPSTREAM_TAG }}
+
+            > [!NOTE]
+            > This build is unsigned. On first launch, right-click the app and select "Open", or run:
+            > ```
+            > xattr -cr /Applications/cmux.app
+            > ```
+          files: cmux-macos-intel.dmg
+          generate_release_notes: false
