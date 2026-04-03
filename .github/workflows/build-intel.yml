@@ -154,14 +154,6 @@ jobs:
           mv ./cmux*.dmg cmux-macos-intel.dmg
           ls -lh cmux-macos-intel.dmg
 
-      - name: Create tar.gz (CLI binary)
-        run: |
-          set -euo pipefail
-          BIN_DIR="build/Build/Products/Release/cmux.app/Contents/Resources/bin"
-          # CLI バイナリを直下に配置したアーカイブ（mise 用）
-          tar czf cmux-macos-intel.tar.gz -C "$BIN_DIR" cmux
-          ls -lh cmux-macos-intel.tar.gz
-
       - name: Create GitHub release
         uses: softprops/action-gh-release@v2
         with:
@@ -177,9 +169,7 @@ jobs:
             > ```
             > xattr -cr /Applications/cmux.app
             > ```
-          files: |
-            cmux-macos-intel.dmg
-            cmux-macos-intel.tar.gz
+          files: cmux-macos-intel.dmg
           generate_release_notes: false
 
       - name: Update Homebrew tap
