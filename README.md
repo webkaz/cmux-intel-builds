@@ -1,17 +1,29 @@
 # cmux Intel Mac Builds
 
-Automated Intel Mac (x86_64) builds of [cmux](https://github.com/manaflow-ai/cmux).
+[cmux](https://github.com/manaflow-ai/cmux) の Intel Mac (x86_64) 自動ビルド。
 
-Upstream releases are checked every 6 hours. When a new release is detected, an unsigned x86_64 build is created and published as a GitHub release.
+上流リリースを6時間ごとにチェックし、新バージョン検出時に署名なし x86_64 ビルドを作成・公開する。
 
-## Download
+## Homebrew でインストール
 
-See [Releases](https://github.com/webkaz/cmux-intel-builds/releases).
+```sh
+brew install webkaz/tap/cmux-intel
+```
 
-Since the builds are unsigned, on first launch:
+更新:
+
+```sh
+brew upgrade --cask cmux-intel
+```
+
+## 手動ダウンロード
+
+[Releases](https://github.com/webkaz/cmux-intel-builds/releases) から DMG を取得。
+
+署名なしビルドのため、初回起動時:
 
 ```sh
 xattr -cr /Applications/cmux.app
 ```
 
-Or right-click the app and select "Open".
+または右クリック → "開く" を選択。
