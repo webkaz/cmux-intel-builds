@@ -154,6 +154,13 @@ jobs:
           mv ./cmux*.dmg cmux-macos-intel.dmg
           ls -lh cmux-macos-intel.dmg
 
+      - name: Create tar.gz
+        run: |
+          set -euo pipefail
+          APP_PATH="build/Build/Products/Release/cmux.app"
+          tar czf cmux-macos-intel.tar.gz -C "$(dirname "$APP_PATH")" cmux.app
+          ls -lh cmux-macos-intel.tar.gz
+
       - name: Create GitHub release
         uses: softprops/action-gh-release@v2
         with:
@@ -169,7 +176,9 @@ jobs:
             > ```
             > xattr -cr /Applications/cmux.app
             > ```
-          files: cmux-macos-intel.dmg
+          files: |
+            cmux-macos-intel.dmg
+            cmux-macos-intel.tar.gz
           generate_release_notes: false
 
       - name: Update Homebrew tap
