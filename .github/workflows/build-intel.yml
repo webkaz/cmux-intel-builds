@@ -154,11 +154,12 @@ jobs:
           mv ./cmux*.dmg cmux-macos-intel.dmg
           ls -lh cmux-macos-intel.dmg
 
-      - name: Create tar.gz
+      - name: Create tar.gz (CLI binary)
         run: |
           set -euo pipefail
-          APP_PATH="build/Build/Products/Release/cmux.app"
-          tar czf cmux-macos-intel.tar.gz -C "$(dirname "$APP_PATH")" cmux.app
+          BIN_DIR="build/Build/Products/Release/cmux.app/Contents/Resources/bin"
+          # CLI バイナリを直下に配置したアーカイブ（mise 用）
+          tar czf cmux-macos-intel.tar.gz -C "$BIN_DIR" cmux
           ls -lh cmux-macos-intel.tar.gz
 
       - name: Create GitHub release
