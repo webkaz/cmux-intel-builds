@@ -111,14 +111,7 @@ jobs:
         id: prebuilt
         run: |
           set -euo pipefail
-          GHOSTTY_SHA=$(git -C ghostty rev-parse HEAD)
-          TAG="xcframework-$GHOSTTY_SHA"
-          URL="https://github.com/manaflow-ai/ghostty/releases/download/$TAG/GhosttyKit.xcframework.tar.gz"
-          echo "Downloading xcframework for ghostty $GHOSTTY_SHA"
-          curl -fSL --retry 5 --retry-delay 15 -o GhosttyKit.xcframework.tar.gz "$URL"
-          tar xzf GhosttyKit.xcframework.tar.gz
-          rm GhosttyKit.xcframework.tar.gz
-          test -d GhosttyKit.xcframework
+          ./scripts/download-prebuilt-ghosttykit.sh
           echo "=== xcframework contents ==="
           find GhosttyKit.xcframework -name GhosttyKit -type f -exec sh -c 'echo "{}:"; file "{}"; lipo -info "{}" 2>/dev/null || true' \;
 
