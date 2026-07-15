@@ -64,7 +64,7 @@ jobs:
       UPSTREAM_TAG: ${{ needs.check-upstream.outputs.upstream_tag }}
     steps:
       - name: Checkout upstream at tag
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: manaflow-ai/cmux
           ref: ${{ needs.check-upstream.outputs.upstream_tag }}
@@ -152,7 +152,7 @@ jobs:
           ls -lh cmux-macos-intel.dmg
 
       - name: Create GitHub release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ env.UPSTREAM_TAG }}-intel
           name: "${{ env.UPSTREAM_TAG }} (Intel Mac)"
