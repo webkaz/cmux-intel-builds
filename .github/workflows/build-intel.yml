@@ -96,20 +96,35 @@ jobs:
       - name: Install zig
         run: |
           set -euo pipefail
-          ZIG_REQUIRED="0.15.2"
-          if command -v zig >/dev/null 2>&1 && zig version 2>/dev/null | grep -q "^${ZIG_REQUIRED}"; then
-            echo "zig ${ZIG_REQUIRED} already installed"
-          else
-            RUNNER_ARCH="$(uname -m)"
-            ZIG_ARCH="$([ "$RUNNER_ARCH" = "arm64" ] && echo aarch64 || echo x86_64)"
-            echo "Installing zig ${ZIG_REQUIRED} (${ZIG_ARCH}) from tarball"
-            curl -fSL "https://ziglang.org/download/${ZIG_REQUIRED}/zig-${ZIG_ARCH}-macos-${ZIG_REQUIRED}.tar.xz" -o /tmp/zig.tar.xz
-            tar xf /tmp/zig.tar.xz -C /tmp
-            sudo mkdir -p /usr/local/bin /usr/local/lib
-            sudo cp -f /tmp/zig-${ZIG_ARCH}-macos-${ZIG_REQUIRED}/zig /usr/local/bin/zig
-            sudo cp -rf /tmp/zig-${ZIG_ARCH}-macos-${ZIG_REQUIRED}/lib /usr/local/lib/zig
-            zig version
+          if [ -x "./scripts/install-zig-ci.sh" ]; then
+            ./scripts/install-zig-ci.sh
+            exit 0
           fi
+
+          # Compatibility fallback for historical tags before the upstream
+          # installer was added. This preserves manual rebuild support.
+          ZIG_REQUIRED="0.15.2"
+          if command -v zig >/dev/null 2>&1 && zig version 2>/dev/null | grep -q "^${ZIG_REQUIRED}$"; then
+            echo "zig ${ZIG_REQUIRED} already installed"
+            exit 0
+          fi
+
+          case "$(uname -m)" in
+            arm64) ZIG_ARCH="aarch64" ;;
+            x86_64) ZIG_ARCH="x86_64" ;;
+            *)
+              echo "Unsupported runner architecture: $(uname -m)" >&2
+              exit 1
+              ;;
+          esac
+
+          echo "Installing legacy zig ${ZIG_REQUIRED} (${ZIG_ARCH}) from tarball"
+          curl -fSL "https://ziglang.org/download/${ZIG_REQUIRED}/zig-${ZIG_ARCH}-macos-${ZIG_REQUIRED}.tar.xz" -o /tmp/zig.tar.xz
+          tar xf /tmp/zig.tar.xz -C /tmp
+          sudo mkdir -p /usr/local/bin /usr/local/lib
+          sudo cp -f "/tmp/zig-${ZIG_ARCH}-macos-${ZIG_REQUIRED}/zig" /usr/local/bin/zig
+          sudo cp -rf "/tmp/zig-${ZIG_ARCH}-macos-${ZIG_REQUIRED}/lib" /usr/local/lib/zig
+          zig version
 
       - name: Download pre-built GhosttyKit.xcframework
         id: prebuilt
